@@ -70,30 +70,47 @@ web/src/
   lib/                        # cn, dates, api client (generated)
 ```
 
-### api/ (FastAPI)
+### api/ (FastAPI) — layered: router → service → repository
 ```
-api/app/
-  main.py
-  core/        # config, db session, clerk auth dependency, encryption
-  models/      # SQLAlchemy models
-  schemas/     # Pydantic request/response models (the API contract)
-  routers/     # workflows, executions, credentials, billing, analytics, cron, webhooks
-  engine/
-    tasks/       # task definitions: type, label, inputs, outputs, credits
-    executors/   # one async function per task type
-    registry.py  # TaskType -> (definition, executor)
-    plan.py      # flow -> execution plan + validation
-    environment.py
-    run.py       # execute_workflow
-  ai/
-    extraction.py         # structured extraction with Pydantic
-    html_preprocess.py
-    workflow_generator.py # natural language -> workflow
-    selector_healer.py
-    browser_agent.py
-    rag/                  # ingest.py, chunking.py, embeddings.py, retrieve.py, answer.py
-    evals/
-  workers/     # Arq tasks: run_workflow, cron tick
+api/
+  Dockerfile
+  pyproject.toml          # uv, ruff, mypy, pytest config
+  alembic/                # migrations
+  tests/
+    unit/                 # engine, services (no DB)
+    integration/          # API + real Postgres (testcontainers)
+  app/
+    main.py                 # app factory, middleware, exception handlers, lifespan
+    core/
+      config.py             # pydantic-settings (env-based config)
+      db.py                 # async engine + session dependency
+      security.py           # Clerk JWT verification, encryption
+      logging.py            # structured JSON logs + request IDs
+      telemetry.py          # OpenTelemetry tracing
+      errors.py             # domain exceptions → HTTP responses
+      rate_limit.py
+    api/v1/                 # routers (HTTP only: parse, call service, return schema)
+      workflows.py, executions.py, credentials.py, billing.py, analytics.py, webhooks.py, cron.py
+    services/               # business logic (no HTTP, no SQL details)
+    repositories/           # DB access (SQLAlchemy queries only)
+    models/                 # SQLAlchemy models
+    schemas/                # Pydantic request/response models (the API contract)
+    engine/
+      tasks/       # task definitions: type, label, inputs, outputs, credits
+      executors/   # one async function per task type
+      registry.py  # TaskType -> (definition, executor)
+      plan.py      # flow -> execution plan + validation
+      environment.py
+      run.py       # execute_workflow
+    ai/
+      extraction.py         # structured extraction with Pydantic
+      html_preprocess.py
+      workflow_generator.py # natural language -> workflow
+      selector_healer.py
+      browser_agent.py
+      rag/                  # ingest.py, chunking.py, embeddings.py, retrieve.py, answer.py
+      evals/
+    workers/     # Arq tasks: run_workflow, cron tick
 ```
 
 ### Key design decisions (be ready to defend these)
@@ -242,8 +259,8 @@ api/app/
 ### M0 — Setup (week 1)
 - Day 1: install tools, create repo + folder layout, add CLAUDE.md + docs/PLAN.md + docs/LOG.md, first commit
 - Day 2: `web/` — Next.js + TS + Tailwind + shadcn init, run it
-- Day 3: `api/` — uv project, FastAPI hello world, `/health` endpoint, ruff
-- Day 4: docker-compose with Postgres + Redis, connect FastAPI to Postgres
+- Day 3: `api/` — uv project (pin Python 3.13), FastAPI hello world, `/health` endpoint, pydantic-settings config, ruff + mypy + pre-commit
+- Day 4: docker-compose with Postgres + Redis (local dev), connect FastAPI to Postgres
 - Day 5: Clerk in `web/`, sign-in/up pages, protected dashboard route
 - Sat: Python basics (types, lists/dicts, functions, classes)
 
@@ -296,7 +313,59 @@ api/app/
 
 ---
 
-## 7. Interview question bank (answer these in your own words when done)
+## 7. Skills checklist — what I must be able to build AND explain by the end
+
+Don't treat this as extra work: each item is attached to a week that already exists. Tick only when I can explain it in an interview without notes.
+
+### Production FastAPI backend
+- [ ] Layered architecture: router → service → repository; why each layer exists (W3)
+- [ ] Dependency injection with `Depends` (db session, current user, settings) (W3)
+- [ ] Config with pydantic-settings, 12-factor env config (M0)
+- [ ] Async SQLAlchemy 2, Alembic migrations, connection pooling, N+1 queries (W2–W3)
+- [ ] API versioning (`/api/v1`), pagination, consistent error format, domain exceptions (W3)
+- [ ] Auth: JWT/JWKS verification, authorization (ownership checks), multi-tenancy by user_id (W3)
+- [ ] Testing pyramid: pytest, fixtures, unit vs integration, testcontainers, mocking LLM calls (W6 onward)
+- [ ] Code quality: ruff, mypy, pre-commit hooks (M0)
+- [ ] CI: GitHub Actions running lint + types + tests on every push (W3)
+- [ ] Docker: multi-stage builds, docker-compose for local dev (M0, W32)
+- [ ] Background jobs: Arq/Redis, retries, idempotency, dead jobs (W13)
+- [ ] Real-time: SSE vs WebSockets vs polling — when to use which (W14)
+- [ ] Concurrency: async/await, `asyncio.gather`, semaphores to limit browsers (W15)
+- [ ] Transactions, row locking, `SELECT … FOR UPDATE SKIP LOCKED`, race conditions (W15, W23)
+- [ ] Caching with Redis (cache-aside, TTL, invalidation) (W17 — cache LLM/HTML results)
+- [ ] Rate limiting (token bucket) per user/API key (W22)
+- [ ] Observability: structured logs, request IDs, OpenTelemetry traces, metrics, health/readiness checks (W14, W32)
+- [ ] Security: encryption at rest (AES-GCM), secrets management, webhook signature verification, CORS, input validation, SSRF protection (users submit URLs!) (W24, M8)
+- [ ] Deployment: separate API + worker services, migrations on deploy, zero-downtime basics (W32)
+- [ ] **Microservices — honest note:** this is a *modular monolith + worker*, which is what most real teams should start with. Be able to explain: when you'd split into services (e.g. an AI service, a scraper-runner service), how they'd communicate (HTTP vs queue/events), and the costs (network failures, distributed tracing, data ownership). Optional stretch (after M7): extract the AI layer into its own FastAPI service talking over the queue.
+
+### AI engineering
+- [ ] **LLM basics:** tokens, context window, temperature/top-p, system/user/assistant roles, streaming, cost & latency trade-offs (W8)
+- [ ] **Structured outputs:** JSON mode vs schema-constrained outputs, Pydantic validation, retry-with-feedback (W8)
+- [ ] **Tool / function calling** (W18)
+- [ ] **Prompt engineering & management:** few-shot, chain-of-thought, prompt templates, prompt versioning (W18–W20)
+- [ ] **Context engineering:** what to put in context, HTML cleaning, chunking, summarisation, token budgets (W17)
+- [ ] **Prompt chaining & validation loops** — LLM output checked by deterministic code (W19–W20)
+- [ ] **ReAct, agents:** agent loop, tools, memory, step limits, guardrails, human-in-the-loop (W21, W25–26)
+- [ ] **Embeddings & vector search:** cosine similarity, ANN indexes (HNSW/IVFFlat in pgvector), embedding model choice (W27)
+- [ ] **RAG:** chunking strategies, hybrid search (BM25 + vector), RRF, reranking, metadata filtering, citations, query rewriting (W27–W29)
+- [ ] **Guardrails & safety:** prompt injection, output validation, PII handling, refusals (W30)
+- [ ] **Evals:** golden datasets, offline vs online evals, LLM-as-judge (and its biases), retrieval metrics (recall@k, MRR), faithfulness, regression tracking (W31)
+- [ ] **LLMOps / observability:** tracing LLM calls (e.g. Langfuse), token/cost tracking, latency, model versioning (W17, W31)
+- [ ] **Reliability:** retries with backoff, timeouts, model fallbacks/routing (cheap model first), semantic caching (W17–W20)
+- [ ] **MCP:** expose workflows as tools for AI agents (stretch, after M7)
+- [ ] **Know the vocabulary (theory, no build needed):** fine-tuning vs RAG vs prompting, LoRA, quantization, distillation, hallucination, transformers/attention at a high level (Karpathy side track)
+
+### Exit test
+At the end I should be able to, without notes:
+1. Draw the full architecture on a whiteboard and walk through one run end to end.
+2. Explain every folder in `api/` and why the layers exist.
+3. Explain the RAG pipeline and how I evaluated it, with real numbers.
+4. Explain one production incident/bug I hit and how I debugged it (keep notes in LOG.md!).
+
+---
+
+## 8. Interview question bank (answer these in your own words when done)
 - Walk me through what happens when a user clicks Execute, end to end.
 - How do you detect cycles? Complexity?
 - Why phases instead of a flat topological order?
