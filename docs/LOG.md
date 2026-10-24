@@ -27,3 +27,10 @@ Append one entry per session. Newest at the bottom.
 - **Stuck on / questions:** none
 - **Next:** M0 Day 2 — scaffold `web/` (Next.js + TS + Tailwind + shadcn) and run it.
 - **Interview Q answered:** none yet
+
+### 2026-10-24 — M0 / Week 1 / Day 2
+- **Did:** Scaffolded `web/` with create-next-app: Next.js 16.4, React 19.3, App Router, TypeScript (strict), Tailwind v4, ESLint, npm. Initialized shadcn/ui (`components.json`, `Button`, `cn()` in `lib/utils.ts`). Build + lint pass.
+- **Learned:** Next 16 generates `AGENTS.md` (notes for AI tools about API changes); commit it or `next dev` keeps re-creating it.
+- **Stuck on / questions:** none
+- **Next:** M0 Day 3 — `api/`: `uv init`, pin Python 3.13, FastAPI hello world + `/health`, pydantic-settings, ruff + mypy + pre-commit.
+- **Interview Q answered:** none yet
